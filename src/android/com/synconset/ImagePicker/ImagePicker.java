@@ -6,6 +6,7 @@ import android.Manifest;
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaPlugin;
 
+import org.apache.cordova.LOG;
 import org.apache.cordova.PluginResult;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -94,7 +95,7 @@ public class ImagePicker extends CordovaPlugin {
                  } else {
                      SharedPreferences sp = cordova.getContext().getSharedPreferences("ImagePicker", Context.MODE_PRIVATE);
                      // 不是第一次请求权限直接返回
-                     if (sp.getString("request","") == "true") {
+                     if (sp.getString("request","").equals("true") ) {
                          this.callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR,"show setting"));
                      } else {
                          SharedPreferences.Editor editor = sp.edit();
@@ -106,16 +107,6 @@ public class ImagePicker extends CordovaPlugin {
 
                  }
              }
-
-            // .. until then use:
-            // if (hasReadPermission()) {
-            //     cordova.startActivityForResult(this, imagePickerIntent, 0);
-            // } else {
-            //     requestReadPermission();
-            //     // The downside is the user needs to re-invoke this picker method.
-            //     // The best thing to do for the dev is check 'hasReadPermission' manually and
-            //     // run 'requestReadPermission' or 'getPictures' based on the outcome.
-            // }
             return true;
         }
         return false;
@@ -150,14 +141,17 @@ public class ImagePicker extends CordovaPlugin {
             callbackContext.success();
         } else {
             SharedPreferences sp = cordova.getContext().getSharedPreferences("ImagePicker", Context.MODE_PRIVATE);
-            SharedPreferences.Editor editor = sp.edit();
-            editor.putString("request", "true");
-            editor.commit();
-            if (sp.getString("request","") == "true") {
 
+            if (sp.getString("request","").equals("true") ) {
+                this.callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR,"show setting"));
+            } else {
+                SharedPreferences.Editor editor = sp.edit();
+                editor.putString("request", "true");
+                editor.commit();
+                PermissionHelper.requestPermission(this, PERMISSION_REQUEST_CODE, Manifest.permission.READ_EXTERNAL_STORAGE);
             }
             Log.d("ImagePicker", "Requesting permissions for READ_EXTERNAL_STORAGE");
-            PermissionHelper.requestPermission(this, PERMISSION_REQUEST_CODE, Manifest.permission.READ_EXTERNAL_STORAGE);
+
         }
 
     }
@@ -202,30 +196,33 @@ public class ImagePicker extends CordovaPlugin {
                                           String[] permissions,
                                           int[] grantResults) throws JSONException {
 
-        for (int r : grantResults) {
-            if (r == PackageManager.PERMISSION_DENIED) {
-                Log.d("ImagePicker", "Permission not granted by the user");
-                // 复选了不在询问
-                if (!ActivityCompat.shouldShowRequestPermissionRationale(cordova.getActivity(), String.valueOf(r))){
-                    // callbackContext.error("show setting");
-                    this.callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR, "复选了不在询问 -不准确的"));
+        try {
+            for(int i=0;i<grantResults.length;i++){
+                if (grantResults[i] == PackageManager.PERMISSION_DENIED) {
+                    Log.d("ImagePicker", "Permission not granted by the user");
+                    // 复选了不在询问
+                    if (!ActivityCompat.shouldShowRequestPermissionRationale(cordova.getActivity(), permissions[i])){
+                        // callbackContext.error("show setting");
+                        this.callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR, "复选了不在询问"));
 
-                } else {
-                    // Tell the JS layer that something went wrong...
-                    this.callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR, "some error"));
-                    // callbackContext.error("some error");
+                    } else {
+                        // Tell the JS layer that something went wrong...
+                        this.callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.ERROR, "some error"));
+                        // callbackContext.error("some error");
+                    }
+                    return;
                 }
-                return;
             }
-        }
 
+            switch (requestCode) {
+                case PERMISSION_REQUEST_CODE:
+                    Log.d("ImagePicker", "User granted the permission for READ_EXTERNAL_STORAGE");
+                    cordova.startActivityForResult(this, this.imagePickerIntent, 0);
 
-        switch (requestCode) {
-            case PERMISSION_REQUEST_CODE:
-                Log.d("ImagePicker", "User granted the permission for READ_EXTERNAL_STORAGE");
-                cordova.startActivityForResult(this, this.imagePickerIntent, 0);
-
-                break;
+                    break;
+            }
+        } catch (Exception e) {
+            Log.e("ImagePicker:", e.getMessage());
         }
     }
 }
